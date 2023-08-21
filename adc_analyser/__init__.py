@@ -20,7 +20,7 @@ from thesdk import *
 
 import pdb
 
-class dac_analyser(thesdk):
+class adc_analyser(thesdk):
     """
     Attributes
     ----------
