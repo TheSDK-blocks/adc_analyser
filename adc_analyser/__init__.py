@@ -15,7 +15,7 @@ if not (os.path.abspath('../../thesdk') in sys.path):
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
-
+from scipy.optimize import curve_fit
 from thesdk import *
 
 import pdb
@@ -26,10 +26,15 @@ class adc_analyser(thesdk):
     ----------
     IOS.Members['in'].Data: ndarray, list(ndarray)
         Input signal to use for plotting. 
+    inl_method : string, default 'endpoint'
+        Method used to calculate INL, 'endpoint' or 'best-fit'. If 'best-fit', 
+        uses best-fit straight line method
     plot : bool, default True
         Should the figure be drawn or not? True -> figure is drawn, False ->
         figure not drawn. 
-    xlabel : string, default "Input code"
+    title : string, default 'default'
+        The title of the figure
+    xlabel : string, default 'Transition (k)'
         The xlabel of the figure
     ylabel : string, default "INL (LSB)"
         The ylabel of the figure
@@ -47,9 +52,12 @@ class adc_analyser(thesdk):
     def __init__(self,*arg): 
         self.print_log(type='I', msg='Initializing %s' %(__name__)) 
         self.proplist = [ ]
+        self.Nbits = 1
+        self.inl_method = 'endpoint' 
         self.plot = True
         self.signames = []
-        self.xlabel = 'Input code'
+        self.title = 'default'
+        self.xlabel = 'Transition (k)'
         self.ylabel = 'INL (LSB)'
         self.annotate = True
         self.sciformat = True
@@ -77,25 +85,68 @@ class adc_analyser(thesdk):
         '''
         This module assumes:
 
-        - Data is given as ascending values from LSB->MSB
-
-        - Only one value per step
+        - Signal is given as an nsamp by 2 matrix (numpy array), 1st column is vin ramp, 2nd column output code 
+       
         '''
         signal = self.IOS.Members['in'].Data
+        v = signal[:,0]
+        code = signal[:,1]
+        Nbits = self.Nbits
+        vlsb = (np.max(v) - np.min(v)) / 2**Nbits
+        transition_indeces = np.where(np.diff(code))
+        if len(transition_indeces) < 2**Nbits-1:
+            self.print_log(type='I',msg='Missing codes!!!')
+        elif len(transition_indeces) > 2**Nbits-1:
+            self.print_log(type='I',msg='Too many transitions!!!')
+        if max(np.diff(code)) > 1:
+            self.print_log(type='I',msg='Codes skipped!!!')
+        transition_voltages = [v[i+1] for i in transition_indeces][0]
+        offset_error = transition_voltages[0] / vlsb - 0.5    
+        gain_error = ( np.max(transition_voltages) - np.min(transition_voltages) ) / vlsb - (2**Nbits - 2)
+
+        signal = transition_voltages 
+        
         lsb_array = np.linspace(np.min(signal),np.max(signal),
                 num=len(signal),endpoint=True)
         lsb_step = np.diff(lsb_array)[0]
-        inl = (signal-lsb_array)/lsb_step
-        inl_max = np.max(np.abs(inl))
-        dnl = np.diff(signal)/lsb_step - 1
+        inl_endpoint = (signal-lsb_array)/lsb_step
+        inl_endpoint_max = np.max(np.abs(inl_endpoint))
+        dnl = np.diff(inl_endpoint)
+        #dnl = np.diff(signal)/lsb_step - 1
         dnl_max = np.max(np.abs(dnl))
+        pdb.set_trace()
+        ints = np.arange(0, len(inl_endpoint))
+
+        # Offset and gain error free transition voltages in LSB
+        offset_gain_error_free = inl_endpoint + ints 
+        
+        if self.inl_method == 'best-fit':
+
+            def best_fit(x, k, b):
+                return k*x + b
+
+            popt, conv = curve_fit(best_fit, ints, offset_gain_error_free)
+            k, b = popt
+            bestfit_vect = [k*i + b for i in ints]
+            inl_bestfit = offset_gain_error_free - bestfit_vect
+            inl_bestfit_max = np.max(np.abs(inl_bestfit))
+            inl = inl_bestfit
+            inl_max = inl_bestfit_max
+
+        else:
+            inl = inl_endpoint
+            inl_max = inl_endpoint_max
+         
+        
 
         # Plot inl:
-        code = np.arange(0,len(signal))
+        code = np.arange(1, len(signal)+1)
         text = ''
         if self.plot:
             plt.figure()
             plt.plot(code,inl)
+            title = self.title if not  self.title == 'default' else f'INL ({self.inl_method})'
+            plt.title(title)
             plt.xlabel(self.xlabel)
             plt.ylabel(self.ylabel)
             if self.sciformat:
@@ -135,5 +186,16 @@ class adc_analyser(thesdk):
             pass
 
 if __name__=="__main__":
-    pass
+    code = [0]*50 + [1] * 45 +[2]*55 + [3] * 50 +[4]*50 + [5] * 50 +[6]*50 + [7] * 50 + [7]*400
+    ramp_low = 0
+    ramp_high = 2
+    v = np.linspace(ramp_low, ramp_high, len(code))
 
+    sig = np.column_stack((v,code))    
+    ana = adc_analyser() 
+    ana.Nbits = 3
+    ana.inl_method = 'endpoint'
+    #ana.inl_method = 'best-fit'
+    ana.IOS.Members['in'].Data = sig
+    ana.run()
+    input()

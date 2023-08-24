@@ -1,4 +1,4 @@
-.. dac_analyser documentation master file.
+.. adc_analyser documentation master file.
    You can adapt this file completely to your liking, 
    but it should at least contain the root `toctree` directive.
 
@@ -6,7 +6,7 @@
    :maxdepth: 3
    :caption: Contents:
 
-.. automodule:: dac_analyser
+.. automodule:: adc_analyser
    :members:
    :undoc-members:
 
