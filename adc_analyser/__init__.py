@@ -1,6 +1,6 @@
 """
 ============
-DAC_analyser
+ADC_analyser
 ============
 
 Calculates the INL and DNL of a given input signal
@@ -94,9 +94,9 @@ class adc_analyser(thesdk):
         Nbits = self.Nbits
         vlsb = (np.max(v) - np.min(v)) / 2**Nbits
         transition_indeces = np.where(np.diff(code))
-        if len(transition_indeces) < 2**Nbits-1:
+        if len(transition_indeces[0]) < 2**Nbits-1:
             self.print_log(type='I',msg='Missing codes!!!')
-        elif len(transition_indeces) > 2**Nbits-1:
+        elif len(transition_indeces[0]) > 2**Nbits-1:
             self.print_log(type='I',msg='Too many transitions!!!')
         if max(np.diff(code)) > 1:
             self.print_log(type='I',msg='Codes skipped!!!')
@@ -114,13 +114,17 @@ class adc_analyser(thesdk):
         dnl = np.diff(inl_endpoint)
         #dnl = np.diff(signal)/lsb_step - 1
         dnl_max = np.max(np.abs(dnl))
+        self.inl_endpoint = inl_endpoint
+        self.inl_endpoint_max = inl_endpoint_max
+        self.dnl = dnl
+        self.dnl_max = dnl_max
         pdb.set_trace()
         ints = np.arange(0, len(inl_endpoint))
 
         # Offset and gain error free transition voltages in LSB
         offset_gain_error_free = inl_endpoint + ints 
         
-        if self.inl_method == 'best-fit':
+        if  'best-fit' in self.inl_method:
 
             def best_fit(x, k, b):
                 return k*x + b
@@ -128,52 +132,59 @@ class adc_analyser(thesdk):
             popt, conv = curve_fit(best_fit, ints, offset_gain_error_free)
             k, b = popt
             bestfit_vect = [k*i + b for i in ints]
-            inl_bestfit = offset_gain_error_free - bestfit_vect
-            inl_bestfit_max = np.max(np.abs(inl_bestfit))
-            inl = inl_bestfit
-            inl_max = inl_bestfit_max
+            self.inl_bestfit = offset_gain_error_free - bestfit_vect
+            self.inl_bestfit_max = np.max(np.abs(self.inl_bestfit))
 
-        else:
-            inl = inl_endpoint
-            inl_max = inl_endpoint_max
-         
-        
-
-        # Plot inl:
-        code = np.arange(1, len(signal)+1)
-        text = ''
         if self.plot:
-            plt.figure()
-            plt.plot(code,inl)
-            title = self.title if not  self.title == 'default' else f'INL ({self.inl_method})'
-            plt.title(title)
-            plt.xlabel(self.xlabel)
-            plt.ylabel(self.ylabel)
-            if self.sciformat:
-                text+='Max INL = {:.2e}\n'.format(inl_max)
-                text+='Max DNL = {:.2e}'.format(dnl_max)
-                self.print_log(type='I',msg=f'Maximun INL is {inl_max}')
-                self.print_log(type='I',msg=f'Maximun DNL is {dnl_max}')
-                plt.gca().yaxis.set_major_formatter(mtick.FormatStrFormatter('%.0e'))
-            else:
-                text+='Max INL = {:.4f}\n'.format(inl_max)
-                text+='Max DNL = {:.4f}'.format(dnl_max)
-                self.print_log(type='I',msg=f'Maximun INL is {inl_max}')
-                self.print_log(type='I',msg=f'Maximun DNL is {dnl_max}')
-            if self.annotate:
-                plt.text(0.025,0.975,text,usetex=plt.rcParams['text.usetex'],
-                        horizontalalignment='left',verticalalignment='top',
-                        multialignment='left',fontsize=plt.rcParams['legend.fontsize'],
-                        fontweight='normal',transform=plt.gca().transAxes,
-                        bbox=dict(boxstyle='square,pad=0',fc='#ffffffa0',ec='none'))
-            if self.set_ylim:
-                plt.ylim((-1.5*inl_max,1.5*inl_max))
-            if len(code) < 10:
-                plt.xticks(np.arange(np.min(code),np.max(code)+1,1.0))
-            plt.show(block=False)
-            return inl, dnl
+            if 'endpoint' in self.inl_method:
+                self.plot_endpoint()
+            if 'best-fit' in self.inl_method:
+                self.plot_bestfit()
+            
+
+
+
+    def plot_endpoint(self):
+        self.plot_func(inl=self.inl_endpoint, inl_max= self.inl_endpoint_max, 
+                dnl=self.dnl, dnl_max=self.dnl_max, inl_method='endpoint')
+
+    def plot_bestfit(self):
+        self.plot_func(inl=self.inl_bestfit, inl_max=self.inl_bestfit_max, 
+                dnl=self.dnl, dnl_max=self.dnl_max, inl_method='best-fit')
+
+
+    def plot_func(self, inl, inl_max, dnl, dnl_max, inl_method):
+        code = np.arange(1, len(self.inl_endpoint)+1)
+        text = ''
+        #if self.plot:
+        plt.figure()
+        plt.plot(code,inl)
+        title = self.title if not  self.title == 'default' else f'INL ({inl_method})'
+        plt.title(title)
+        plt.xlabel(self.xlabel)
+        plt.ylabel(self.ylabel)
+        if self.sciformat:
+            text+='Max INL = {:.2e}\n'.format(inl_max)
+            text+='Max DNL = {:.2e}'.format(dnl_max)
+            self.print_log(type='I',msg=f'Maximun INL is {inl_max}')
+            self.print_log(type='I',msg=f'Maximun DNL is {dnl_max}')
+            plt.gca().yaxis.set_major_formatter(mtick.FormatStrFormatter('%.0e'))
         else:
-            return inl, dnl
+            text+='Max INL = {:.4f}\n'.format(inl_max)
+            text+='Max DNL = {:.4f}'.format(dnl_max)
+            self.print_log(type='I',msg=f'Maximun INL is {inl_max}')
+            self.print_log(type='I',msg=f'Maximun DNL is {dnl_max}')
+        if self.annotate:
+            plt.text(0.025,0.975,text,usetex=plt.rcParams['text.usetex'],
+                    horizontalalignment='left',verticalalignment='top',
+                    multialignment='left',fontsize=plt.rcParams['legend.fontsize'],
+                    fontweight='normal',transform=plt.gca().transAxes,
+                    bbox=dict(boxstyle='square,pad=0',fc='#ffffffa0',ec='none'))
+        if self.set_ylim:
+            plt.ylim((-1.5*inl_max,1.5*inl_max))
+        if len(code) < 10:
+            plt.xticks(np.arange(np.min(code),np.max(code)+1,1.0))
+        plt.show(block=False)
 
 
     def run(self,*arg):
@@ -194,7 +205,7 @@ if __name__=="__main__":
     sig = np.column_stack((v,code))    
     ana = adc_analyser() 
     ana.Nbits = 3
-    ana.inl_method = 'endpoint'
+    ana.inl_method = 'endpoint', 'best-fit'
     #ana.inl_method = 'best-fit'
     ana.IOS.Members['in'].Data = sig
     ana.run()
