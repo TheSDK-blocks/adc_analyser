@@ -111,13 +111,17 @@ class adc_analyser(thesdk):
         lsb_step = np.diff(lsb_array)[0]
         inl_endpoint = (signal-lsb_array)/lsb_step
         inl_endpoint_max = np.max(np.abs(inl_endpoint))
+        inl_endpoint_min = np.min(inl_endpoint)
         dnl = np.diff(inl_endpoint)
         #dnl = np.diff(signal)/lsb_step - 1
-        dnl_max = np.max(np.abs(dnl))
+        dnl_max = np.max(dnl)
+        dnl_min = np.min(dnl)
         self.inl_endpoint = inl_endpoint
         self.inl_endpoint_max = inl_endpoint_max
+        self.inl_endpoint_min = inl_endpoint_min
         self.dnl = dnl
         self.dnl_max = dnl_max
+        self.dnl_min = dnl_min
         pdb.set_trace()
         ints = np.arange(0, len(inl_endpoint))
 
@@ -133,7 +137,9 @@ class adc_analyser(thesdk):
             k, b = popt
             bestfit_vect = [k*i + b for i in ints]
             self.inl_bestfit = offset_gain_error_free - bestfit_vect
-            self.inl_bestfit_max = np.max(np.abs(self.inl_bestfit))
+            self.inl_bestfit_max = np.max(self.inl_bestfit)
+            self.inl_bestfit_min = np.min(self.inl_bestfit)
+            
 
         if self.plot:
             if 'endpoint' in self.inl_method:
@@ -145,27 +151,30 @@ class adc_analyser(thesdk):
 
 
     def plot_endpoint(self):
-        self.plot_func(inl=self.inl_endpoint, inl_max= self.inl_endpoint_max, 
-                dnl=self.dnl, dnl_max=self.dnl_max, inl_method='endpoint')
+        self.plot_func(inl=self.inl_endpoint, inl_min=self.inl_endpoint_min ,inl_max=self.inl_endpoint_max, 
+                dnl=self.dnl, dnl_min=self.dnl_min, dnl_max=self.dnl_max, inl_method='endpoint')
 
     def plot_bestfit(self):
-        self.plot_func(inl=self.inl_bestfit, inl_max=self.inl_bestfit_max, 
-                dnl=self.dnl, dnl_max=self.dnl_max, inl_method='best-fit')
+        self.plot_func(inl=self.inl_bestfit, inl_min=self.inl_bestfit_min, inl_max=self.inl_bestfit_max, 
+                dnl=self.dnl, dnl_min=self.dnl_min, dnl_max=self.dnl_max, inl_method='best-fit')
 
 
-    def plot_func(self, inl, inl_max, dnl, dnl_max, inl_method):
+    def plot_func(self, inl, inl_min, inl_max, dnl, dnl_min, dnl_max, inl_method):
         code = np.arange(1, len(self.inl_endpoint)+1)
         text = ''
         #if self.plot:
         plt.figure()
+        plt.subplot(211)
         plt.plot(code,inl)
-        title = self.title if not  self.title == 'default' else f'INL ({inl_method})'
+        title = self.title if not  self.title == 'default' else f'INL ({inl_method}) [{inl_min:.2f}, {inl_max:.2f}]'
         plt.title(title)
         plt.xlabel(self.xlabel)
         plt.ylabel(self.ylabel)
         if self.sciformat:
-            text+='Max INL = {:.2e}\n'.format(inl_max)
-            text+='Max DNL = {:.2e}'.format(dnl_max)
+            #text+='Max INL = {:.2e}\n'.format(inl_max)
+            #text+='Max DNL = {:.2e}'.format(dnl_max)
+            #text+='INL = {:.2e}\n'.format(inl_max)
+            #text+='DNL = {:.2e}'.format(dnl_max)
             self.print_log(type='I',msg=f'Maximun INL is {inl_max}')
             self.print_log(type='I',msg=f'Maximun DNL is {dnl_max}')
             plt.gca().yaxis.set_major_formatter(mtick.FormatStrFormatter('%.0e'))
@@ -181,7 +190,36 @@ class adc_analyser(thesdk):
                     fontweight='normal',transform=plt.gca().transAxes,
                     bbox=dict(boxstyle='square,pad=0',fc='#ffffffa0',ec='none'))
         if self.set_ylim:
-            plt.ylim((-1.5*inl_max,1.5*inl_max))
+            plt.ylim((1.5*inl_min,1.5*inl_max))
+        if len(code) < 10:
+            plt.xticks(np.arange(np.min(code),np.max(code)+1,1.0))
+
+
+        plt.subplot(212)
+        plt.title(f'DNL [{dnl_min:.2f}, {dnl_max:.2f}]')
+        code = np.arange(1, len(self.inl_endpoint))
+        plt.plot(code, dnl)
+        plt.xlabel('Code (k)')
+        plt.ylabel('DNL')
+        if self.sciformat:
+            #text+='Max INL = {:.2e}\n'.format(inl_max)
+            #text+='Max DNL = {:.2e}'.format(dnl_max)
+            self.print_log(type='I',msg=f'Maximun INL is {inl_max}')
+            self.print_log(type='I',msg=f'Maximun DNL is {dnl_max}')
+            plt.gca().yaxis.set_major_formatter(mtick.FormatStrFormatter('%.0e'))
+        else:
+            #text+='Max INL = {:.4f}\n'.format(inl_max)
+            #text+='Max DNL = {:.4f}'.format(dnl_max)
+            self.print_log(type='I',msg=f'Maximun INL is {inl_max}')
+            self.print_log(type='I',msg=f'Maximun DNL is {dnl_max}')
+        if self.annotate:
+            plt.text(0.025,0.975,text,usetex=plt.rcParams['text.usetex'],
+                    horizontalalignment='left',verticalalignment='top',
+                    multialignment='left',fontsize=plt.rcParams['legend.fontsize'],
+                    fontweight='normal',transform=plt.gca().transAxes,
+                    bbox=dict(boxstyle='square,pad=0',fc='#ffffffa0',ec='none'))
+        if self.set_ylim:
+            plt.ylim((1.5*dnl_min,1.5*dnl_max))
         if len(code) < 10:
             plt.xticks(np.arange(np.min(code),np.max(code)+1,1.0))
         plt.show(block=False)
