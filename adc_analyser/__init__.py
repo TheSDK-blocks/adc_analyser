@@ -4,7 +4,11 @@ ADC_analyser
 ============
 
 Calculates the INL and DNL of a given input signal
-and plots the INL curve
+and plots the INL and DNL curves.
+INL is calculated with respect to the transition points
+(not the midpoints of the steps).
+INL can be chosen to be calculated with endpoint or 
+best-fit method.
 
 """
 import os
@@ -26,24 +30,26 @@ class adc_analyser(thesdk):
     ----------
     IOS.Members['in'].Data: ndarray, list(ndarray)
         Input signal to use for plotting. 
+    Nbits : int
+        Number of bits of the ADC under test
     inl_method : string, default 'endpoint'
         Method used to calculate INL, 'endpoint' or 'best-fit'. If 'best-fit', 
-        uses best-fit straight line method
+        uses best-fit straight line method.
     plot : bool, default True
         Should the figure be drawn or not? True -> figure is drawn, False ->
         figure not drawn. 
-    title : string, default 'default'
-        The title of the figure
-    xlabel : string, default 'Transition (k)'
-        The xlabel of the figure
-    ylabel : string, default "INL (LSB)"
-        The ylabel of the figure
-    annotate : bool, default True
-        Add maximum INL and maximum DNL to the INL curve figure
-    sciformat : bool, default True
+    plot_method : string, default 'curve'
+        Plot method, 'curve', 'bar' or 'stem'
+    inl_title : string, default 'default'
+        The title of the INL plot
+        If 'default', title is 'INL (<inl_method>) min/max inl_min/inl_max'
+    dnl_title : string, default 'default'
+        The title of the DNL plot
+        If 'default', title is 'DNL min/max dnl_min/dnl_max'
+    sciformat : bool, default False
         Change the y-axis and annotation values to scientific format (e.g. 1e-02)
-    set_ylim : bool, default True
-        Set the ylimits of the curve to -1.5LSB - 1.5LSB
+    set_ylim : bool, default False 
+        Set the ylimits of the INL plot to -1.5LSB - 1.5LSB
     """
     @property
     def _classfile(self):
@@ -56,13 +62,13 @@ class adc_analyser(thesdk):
         self.inl_method = 'endpoint' 
         self.plot = True
         self.signames = []
-        self.title = 'default'
-        self.xlabel = 'Transition (k)'
-        self.ylabel = 'INL (LSB)'
-        self.annotate = True
-        self.sciformat = True
-        self.set_ylim = True
+        self.inl_title = 'default'
+        self.dnl_title = 'default'
+        self.sciformat = False
+        self.set_ylim = False
         self.plot = True
+        self.barwidth = 0.3
+        self.plot_method = 'curve'
 
         self.IOS=Bundle()
         self.IOS.Members['in']=IO()
@@ -89,10 +95,10 @@ class adc_analyser(thesdk):
        
         '''
         signal = self.IOS.Members['in'].Data
-        v = signal[:,0]
+        vin = signal[:,0]
         code = signal[:,1]
         Nbits = self.Nbits
-        vlsb = (np.max(v) - np.min(v)) / 2**Nbits
+        vlsb = (np.max(vin) - np.min(vin)) / 2**Nbits
         transition_indeces = np.where(np.diff(code))
         if len(transition_indeces[0]) < 2**Nbits-1:
             self.print_log(type='I',msg='Missing codes!!!')
@@ -100,7 +106,7 @@ class adc_analyser(thesdk):
             self.print_log(type='I',msg='Too many transitions!!!')
         if max(np.diff(code)) > 1:
             self.print_log(type='I',msg='Codes skipped!!!')
-        transition_voltages = [v[i+1] for i in transition_indeces][0]
+        transition_voltages = [vin[i+1] for i in transition_indeces][0]
         offset_error = transition_voltages[0] / vlsb - 0.5    
         gain_error = ( np.max(transition_voltages) - np.min(transition_voltages) ) / vlsb - (2**Nbits - 2)
 
@@ -110,7 +116,7 @@ class adc_analyser(thesdk):
                 num=len(signal),endpoint=True)
         lsb_step = np.diff(lsb_array)[0]
         inl_endpoint = (signal-lsb_array)/lsb_step
-        inl_endpoint_max = np.max(np.abs(inl_endpoint))
+        inl_endpoint_max = np.max(inl_endpoint)
         inl_endpoint_min = np.min(inl_endpoint)
         dnl = np.diff(inl_endpoint)
         #dnl = np.diff(signal)/lsb_step - 1
@@ -122,7 +128,6 @@ class adc_analyser(thesdk):
         self.dnl = dnl
         self.dnl_max = dnl_max
         self.dnl_min = dnl_min
-        pdb.set_trace()
         ints = np.arange(0, len(inl_endpoint))
 
         # Offset and gain error free transition voltages in LSB
@@ -160,64 +165,51 @@ class adc_analyser(thesdk):
 
 
     def plot_func(self, inl, inl_min, inl_max, dnl, dnl_min, dnl_max, inl_method):
+
+        # Plot INL:
         code = np.arange(1, len(self.inl_endpoint)+1)
         text = ''
-        #if self.plot:
         plt.figure()
+        plt.subplots_adjust(hspace=0.9)
         plt.subplot(211)
-        plt.plot(code,inl)
-        title = self.title if not  self.title == 'default' else f'INL ({inl_method}) [{inl_min:.2f}, {inl_max:.2f}]'
-        plt.title(title)
-        plt.xlabel(self.xlabel)
-        plt.ylabel(self.ylabel)
-        if self.sciformat:
-            #text+='Max INL = {:.2e}\n'.format(inl_max)
-            #text+='Max DNL = {:.2e}'.format(dnl_max)
-            #text+='INL = {:.2e}\n'.format(inl_max)
-            #text+='DNL = {:.2e}'.format(dnl_max)
-            self.print_log(type='I',msg=f'Maximun INL is {inl_max}')
-            self.print_log(type='I',msg=f'Maximun DNL is {dnl_max}')
-            plt.gca().yaxis.set_major_formatter(mtick.FormatStrFormatter('%.0e'))
-        else:
-            text+='Max INL = {:.4f}\n'.format(inl_max)
-            text+='Max DNL = {:.4f}'.format(dnl_max)
-            self.print_log(type='I',msg=f'Maximun INL is {inl_max}')
-            self.print_log(type='I',msg=f'Maximun DNL is {dnl_max}')
-        if self.annotate:
-            plt.text(0.025,0.975,text,usetex=plt.rcParams['text.usetex'],
-                    horizontalalignment='left',verticalalignment='top',
-                    multialignment='left',fontsize=plt.rcParams['legend.fontsize'],
-                    fontweight='normal',transform=plt.gca().transAxes,
-                    bbox=dict(boxstyle='square,pad=0',fc='#ffffffa0',ec='none'))
-        if self.set_ylim:
+        if self.plot_method == 'curve':
+            plt.plot(code,inl)
+        elif self.plot_method == 'stem':
+            plt.stem(code, inl)
             plt.ylim((1.5*inl_min,1.5*inl_max))
+        elif self.plot_method == 'bar':
+            plt.bar(code, inl, width=self.barwidth)
+        title = self.inl_title if not self.inl_title == 'default' else f'INL ({inl_method}) min/max: {inl_min:.2f}/{inl_max:.2f}'
+        plt.title(title)
+        plt.xlabel('Transition (k)')
+        plt.ylabel('INL (LSB)')
+        if self.sciformat:
+            plt.gca().yaxis.set_major_formatter(mtick.FormatStrFormatter('%.0e'))
+        self.print_log(type='I',msg=f'Minimum INL is {inl_min}')
+        self.print_log(type='I',msg=f'Maximum INL is {inl_max}')
+        if self.set_ylim:
+            plt.ylim((-1.5, 1.5))
         if len(code) < 10:
             plt.xticks(np.arange(np.min(code),np.max(code)+1,1.0))
 
-
+        # Plot DNL:
         plt.subplot(212)
-        plt.title(f'DNL [{dnl_min:.2f}, {dnl_max:.2f}]')
         code = np.arange(1, len(self.inl_endpoint))
-        plt.plot(code, dnl)
+        if self.plot_method == 'curve':
+            plt.plot(code,dnl)
+        elif self.plot_method == 'stem':
+            plt.stem(code, dnl, )
+            plt.ylim((1.5*dnl_min,1.5*dnl_max))
+        elif self.plot_method == 'bar':
+            plt.bar(code, dnl, width=self.barwidth)
+        title = self.dnl_title if not self.dnl_title == 'default' else f'DNL min/max: {dnl_min:.2f}/{dnl_max:.2f}'
+        plt.title(title)
         plt.xlabel('Code (k)')
-        plt.ylabel('DNL')
+        plt.ylabel('DNL (LSB)')
         if self.sciformat:
-            #text+='Max INL = {:.2e}\n'.format(inl_max)
-            #text+='Max DNL = {:.2e}'.format(dnl_max)
-            self.print_log(type='I',msg=f'Maximun INL is {inl_max}')
-            self.print_log(type='I',msg=f'Maximun DNL is {dnl_max}')
             plt.gca().yaxis.set_major_formatter(mtick.FormatStrFormatter('%.0e'))
-        else:
-            #text+='Max INL = {:.4f}\n'.format(inl_max)
-            #text+='Max DNL = {:.4f}'.format(dnl_max)
-            self.print_log(type='I',msg=f'Maximun INL is {inl_max}')
-            self.print_log(type='I',msg=f'Maximun DNL is {dnl_max}')
-        if self.annotate:
-            plt.text(0.025,0.975,text,usetex=plt.rcParams['text.usetex'],
-                    horizontalalignment='left',verticalalignment='top',
-                    multialignment='left',fontsize=plt.rcParams['legend.fontsize'],
-                    fontweight='normal',transform=plt.gca().transAxes,
-                    bbox=dict(boxstyle='square,pad=0',fc='#ffffffa0',ec='none'))
+        self.print_log(type='I',msg=f'Minimum DNL is {dnl_min}')
+        self.print_log(type='I',msg=f'Maximum DNL is {dnl_max}')
         if self.set_ylim:
             plt.ylim((1.5*dnl_min,1.5*dnl_max))
         if len(code) < 10:
@@ -235,16 +227,36 @@ class adc_analyser(thesdk):
             pass
 
 if __name__=="__main__":
-    code = [0]*50 + [1] * 45 +[2]*55 + [3] * 50 +[4]*50 + [5] * 50 +[6]*50 + [7] * 50 + [7]*400
+    import plot_format
+    plot_format.set_style('isscc')
+
+
+    # Make up some data for testing:
+
+
+    # Make a random staircase curve (output code) 
+    Nbits = 5
+    nums = np.random.randint(5, 10, size=2**Nbits)
+    code = []
+    for i in range(2**Nbits):
+        code += [i] * nums[i]
+
+    # Make a test ramp signal (that imaginarily produced the staircase curve)
     ramp_low = 0
     ramp_high = 2
-    v = np.linspace(ramp_low, ramp_high, len(code))
+    vin_ramp = np.linspace(ramp_low, ramp_high, len(code))
 
-    sig = np.column_stack((v,code))    
+    sig = np.column_stack((vin_ramp, code))    
     ana = adc_analyser() 
-    ana.Nbits = 3
+    ana.Nbits = Nbits
     ana.inl_method = 'endpoint', 'best-fit'
     #ana.inl_method = 'best-fit'
+    #ana.inl_method = 'endpoint'
     ana.IOS.Members['in'].Data = sig
+    ana.plot_method = 'curve'
+    ana.run()
+    ana.plot_method = 'stem'
+    ana.run()
+    ana.plot_method = 'bar'
     ana.run()
     input()
