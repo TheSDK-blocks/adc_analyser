@@ -92,6 +92,7 @@ class adc_analyser(thesdk):
         This module assumes:
 
         - Signal is given as an nsamp by 2 matrix (numpy array), 1st column is vin ramp, 2nd column output code 
+          (Use e.g. numpy.column_stack( (vin_ramp, output_code) )
        
         '''
         signal = self.IOS.Members['in'].Data
