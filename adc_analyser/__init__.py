@@ -77,6 +77,16 @@ class adc_analyser(thesdk):
         self.par= False
         self.queue= []
 
+        self.inl_endpoint = None
+        self.inl_endpoint_min = None
+        self.inl_endpoint_max = None
+        self.inl_bestfit = None 
+        self.inl_bestfit_min = None 
+        self.inl_bestfit_max = None
+        self.dnl = None
+        self.dnl_min = None
+        self.dnl_max = None
+
         if len(arg)>=1:
             parent=arg[0]
             self.copy_propval(parent,self.proplist)
