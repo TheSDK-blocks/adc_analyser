@@ -77,6 +77,19 @@ class adc_analyser(thesdk):
         self.par= False
         self.queue= []
 
+        self.inl_endpoint = None
+        self.inl_endpoint_min = None
+        self.inl_endpoint_max = None
+        self.inl_endpoint_abs_max = None
+        self.inl_bestfit = None 
+        self.inl_bestfit_min = None 
+        self.inl_bestfit_max = None
+        self.inl_bestfit_abs_max = None
+        self.dnl = None
+        self.dnl_min = None
+        self.dnl_max = None
+        self.dnl_abs_max = None
+
         if len(arg)>=1:
             parent=arg[0]
             self.copy_propval(parent,self.proplist)
@@ -119,16 +132,20 @@ class adc_analyser(thesdk):
         inl_endpoint = (signal-lsb_array)/lsb_step
         inl_endpoint_max = np.max(inl_endpoint)
         inl_endpoint_min = np.min(inl_endpoint)
+        inl_endpoint_abs_max = np.max([np.abs(inl_endpoint_min), inl_endpoint_max])
         dnl = np.diff(inl_endpoint)
         #dnl = np.diff(signal)/lsb_step - 1
         dnl_max = np.max(dnl)
         dnl_min = np.min(dnl)
+        dnl_abs_max = np.max([np.abs(dnl_min), dnl_max])
         self.inl_endpoint = inl_endpoint
         self.inl_endpoint_max = inl_endpoint_max
         self.inl_endpoint_min = inl_endpoint_min
+        self.inl_endpoint_abs_max = inl_endpoint_abs_max
         self.dnl = dnl
         self.dnl_max = dnl_max
         self.dnl_min = dnl_min
+        self.dnl_abs_max = dnl_abs_max
         ints = np.arange(0, len(inl_endpoint))
 
         # Offset and gain error free transition voltages in LSB
@@ -145,6 +162,7 @@ class adc_analyser(thesdk):
             self.inl_bestfit = offset_gain_error_free - bestfit_vect
             self.inl_bestfit_max = np.max(self.inl_bestfit)
             self.inl_bestfit_min = np.min(self.inl_bestfit)
+            self.inl_bestfit_abs_max = np.max([np.abs(self.inl_bestfit_min), self.inl_bestfit_max])
             
 
         if self.plot:
