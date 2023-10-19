@@ -69,6 +69,8 @@ class adc_analyser(thesdk):
         self.plot = True
         self.barwidth = 0.3
         self.plot_method = 'curve'
+        self.export = (False, '../figures/inl_dnl')
+        self.figformat='pdf'
 
         self.IOS=Bundle()
         self.IOS.Members['in']=IO()
@@ -188,7 +190,7 @@ class adc_analyser(thesdk):
         # Plot INL:
         code = np.arange(1, len(self.inl_endpoint)+1)
         text = ''
-        plt.figure()
+        fig=plt.figure()
         plt.subplots_adjust(hspace=0.9)
         plt.subplot(211)
         if self.plot_method == 'curve':
@@ -233,7 +235,15 @@ class adc_analyser(thesdk):
             plt.ylim((1.5*dnl_min,1.5*dnl_max))
         if len(code) < 10:
             plt.xticks(np.arange(np.min(code),np.max(code)+1,1.0))
-        plt.show(block=False)
+        if self.export[0]:
+            fname = f'{self.export[1]}.{self.figformat}'
+            self.print_log(msg='Saving figure to %s' % fname)
+            fig.savefig(fname, format=self.figformat)
+        if self.plot:
+            plt.show(block=False)
+            plt.pause(0.5)
+        else:
+            plt.close(fig)
 
 
     def run(self,*arg):
