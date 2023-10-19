@@ -30,7 +30,7 @@ class adc_analyser(thesdk):
     ----------
     IOS.Members['in'].Data: ndarray, list(ndarray)
         Input signal to use for plotting. 
-    Nbits : int
+    bits : int
         Number of bits of the ADC under test
     inl_method : string, default 'endpoint'
         Method used to calculate INL, 'endpoint' or 'best-fit'. If 'best-fit', 
@@ -57,8 +57,8 @@ class adc_analyser(thesdk):
 
     def __init__(self,*arg): 
         self.print_log(type='I', msg='Initializing %s' %(__name__)) 
-        self.proplist = [ ]
-        self.Nbits = 1
+        self.proplist = ['inl_method', 'bits', 'plot']
+        self.bits = 1
         self.inl_method = 'endpoint' 
         self.plot = True
         self.signames = []
@@ -111,18 +111,18 @@ class adc_analyser(thesdk):
         signal = self.IOS.Members['in'].Data
         vin = signal[:,0]
         code = signal[:,1]
-        Nbits = self.Nbits
-        vlsb = (np.max(vin) - np.min(vin)) / 2**Nbits
+        bits = self.bits
+        vlsb = (np.max(vin) - np.min(vin)) / 2**bits
         transition_indeces = np.where(np.diff(code))
-        if len(transition_indeces[0]) < 2**Nbits-1:
-            self.print_log(type='I',msg='Missing codes!!!')
-        elif len(transition_indeces[0]) > 2**Nbits-1:
-            self.print_log(type='I',msg='Too many transitions!!!')
+        if len(transition_indeces[0]) < 2**bits-1:
+            self.print_log(type='W',msg='Missing codes!!!')
+        elif len(transition_indeces[0]) > 2**bits-1:
+            self.print_log(type='W',msg='Too many transitions!!!')
         if max(np.diff(code)) > 1:
-            self.print_log(type='I',msg='Codes skipped!!!')
+            self.print_log(type='W',msg='Codes skipped!!!')
         transition_voltages = [vin[i+1] for i in transition_indeces][0]
         offset_error = transition_voltages[0] / vlsb - 0.5    
-        gain_error = ( np.max(transition_voltages) - np.min(transition_voltages) ) / vlsb - (2**Nbits - 2)
+        gain_error = ( np.max(transition_voltages) - np.min(transition_voltages) ) / vlsb - (2**bits - 2)
 
         signal = transition_voltages 
         
@@ -254,10 +254,10 @@ if __name__=="__main__":
 
 
     # Make a random staircase curve (output code) 
-    Nbits = 5
-    nums = np.random.randint(5, 10, size=2**Nbits)
+    bits = 5
+    nums = np.random.randint(5, 10, size=2**bits)
     code = []
-    for i in range(2**Nbits):
+    for i in range(2**bits):
         code += [i] * nums[i]
 
     # Make a test ramp signal (that imaginarily produced the staircase curve)
@@ -267,7 +267,7 @@ if __name__=="__main__":
 
     sig = np.column_stack((vin_ramp, code))    
     ana = adc_analyser() 
-    ana.Nbits = Nbits
+    ana.bits = bits
     ana.inl_method = 'endpoint', 'best-fit'
     #ana.inl_method = 'best-fit'
     #ana.inl_method = 'endpoint'
