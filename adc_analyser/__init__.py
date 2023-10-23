@@ -68,6 +68,7 @@ class adc_analyser(thesdk):
         self.set_ylim = False
         self.plot = True
         self.barwidth = 0.3
+        self.fractional = False
         self.plot_method = 'curve'
         self.export = (False, '../figures/inl_dnl')
         self.figformat='pdf'
@@ -114,18 +115,21 @@ class adc_analyser(thesdk):
         vin = signal[:,0]
         code = signal[:,1]
         bits = self.bits
-        vlsb = (np.max(vin) - np.min(vin)) / 2**bits
+        if not isinstance(self.fractional, bool):
+            self.print_log(type='F', msg='self.fractional must be a Boolean!')
+        redundancy = int(self.fractional)
+        num_quant = 2**(bits+redundancy) - redundancy - 1
+        vlsb = (np.max(vin) - np.min(vin)) / 2**(bits+redundancy)
         transition_indeces = np.where(np.diff(code))
-        if len(transition_indeces[0]) < 2**bits-1:
+        if len(transition_indeces[0]) < num_quant:
             self.print_log(type='W',msg='Missing codes!!!')
-        elif len(transition_indeces[0]) > 2**bits-1:
+        elif len(transition_indeces[0]) > num_quant:
             self.print_log(type='W',msg='Too many transitions!!!')
         if max(np.diff(code)) > 1:
             self.print_log(type='W',msg='Codes skipped!!!')
         transition_voltages = [vin[i+1] for i in transition_indeces][0]
-        offset_error = transition_voltages[0] / vlsb - 0.5    
-        gain_error = ( np.max(transition_voltages) - np.min(transition_voltages) ) / vlsb - (2**bits - 2)
-
+        offset_error = (transition_voltages[0] - min(vin)) / vlsb - 0.5 - redundancy
+        gain_error = ( np.max(transition_voltages) - np.min(transition_voltages) ) / vlsb - num_quant + 1
         signal = transition_voltages 
         
         lsb_array = np.linspace(np.min(signal),np.max(signal),
